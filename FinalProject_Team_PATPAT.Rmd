@@ -1,0 +1,102 @@
+---
+title: "Final_Project"
+author: "Arpit, Prachi, Tejas"
+date: '2022-04-28'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(readr)
+library(tibble)
+library(rsample)
+library(dplyr)
+library(rpart)
+library(ggplot2)
+library(knitr)
+library(purrr)
+library(glmnet)
+```
+
+
+```{r}
+history_data = read.csv("historic_property_data.csv")
+predict_data = read.csv("predict_property_data.csv")
+```
+
+
+
+```{r}
+#Removing columns which are not predictors (from code book)
+hist_clean1 = select(history_data, -c(char_cnst_qlty,char_ot_impr,char_renovation,char_repair_cnd,char_site,geo_black_perc,geo_fips,geo_his_perc,geo_municipality,geo_other_perc,geo_property_city,geo_property_zip,geo_white_perc,ind_large_home,meta_cdu,meta_class,meta_certified_est_bldg,meta_certified_est_land,geo_asian_perc,geo_tract_pop,meta_deed_type))
+
+#Checking the NA percentage of all columns
+colSums(is.na(hist_clean1))*100/nrow(hist_clean1)
+
+nrow(hist_clean1)
+
+#removing columns char_apts with na percentge greater than 50% - char_apts, char_tp_dsgn, char_attic_fnsh, char_porch
+hist_clean2 = select (hist_clean1, -c(char_apts, char_tp_dsgn, char_attic_fnsh, char_porch))
+```
+```{r}
+#Removing columns which are not predictors (from code book)
+pred_clean1 = select(predict_data, -c(char_cnst_qlty,char_ot_impr,char_renovation,char_repair_cnd,char_site,geo_black_perc,geo_fips,geo_his_perc,geo_municipality,geo_other_perc,geo_property_city,geo_property_zip,geo_white_perc,ind_large_home,meta_cdu,meta_class,meta_certified_est_bldg,meta_certified_est_land,geo_asian_perc,geo_tract_pop,meta_deed_type))
+
+colSums(is.na(pred_clean1))*100/nrow(pred_clean1)
+
+#The columns behavior from history and predict data is almost similar
+pred_clean2 = select (pred_clean1, -c(char_apts, char_tp_dsgn, char_attic_fnsh, char_porch))
+```
+```{r}
+#Creating function to replace NA values with max occurence. 
+calc_mode <- function(x){
+  
+  # List the distinct / unique values
+  distinct_values <- unique(x)
+  
+  # Count the occurrence of each distinct value
+  distinct_tabulate <- tabulate(match(x, distinct_values))
+  
+  # Return the value with the highest occurrence
+  distinct_values[which.max(distinct_tabulate)]
+}
+```
+```{r}
+#Replacing NA values with mode
+y=hist_clean2
+
+y$char_ext_wall[is.na(y$char_ext_wall)]<-calc_mode(y$char_ext_wall)
+y$char_roof_cnst[is.na(y$char_roof_cnst)]<-calc_mode(y$char_roof_cnst)
+y$char_bsmt[is.na(y$char_bsmt)]<-calc_mode(y$char_bsmt)
+y$char_bsmt_fin[is.na(y$char_bsmt_fin)]<-calc_mode(y$char_bsmt_fin)
+y$char_heat[is.na(y$char_heat)]<-calc_mode(y$char_heat)
+y$char_oheat[is.na(y$char_oheat)]<-calc_mode(y$char_oheat)
+y$char_air[is.na(y$char_air)]<-calc_mode(y$char_air)
+y$char_frpl[is.na(y$char_frpl)]<-calc_mode(y$char_frpl)
+y$char_attic_type[is.na(y$char_attic_type)]<-calc_mode(y$char_attic_type)
+y$char_tp_plan[is.na(y$char_tp_plan)]<-calc_mode(y$char_tp_plan)
+y$char_gar1_size[is.na(y$char_gar1_size)]<-calc_mode(y$char_gar1_size)
+y$char_gar1_cnst[is.na(y$char_gar1_cnst)]<-calc_mode(y$char_gar1_cnst)
+y$char_gar1_att[is.na(y$char_gar1_att)]<-calc_mode(y$char_gar1_att)
+y$char_gar1_area[is.na(y$char_gar1_area)]<-calc_mode(y$char_gar1_area)
+y$char_use[is.na(y$char_use)]<-calc_mode(y$char_use)
+#y$char_repair_cnd[is.na(y$char_repair_cnd)]<-calc_mode(y$char_repair_cnd)
+y$char_type_resd[is.na(y$char_type_resd)]<-calc_mode(y$char_type_resd)
+y$geo_fs_flood_factor[is.na(y$geo_fs_flood_factor)]<-calc_mode(y$geo_fs_flood_factor)
+y$geo_school_elem_district[is.na(y$geo_school_elem_district)]<-calc_mode(y$geo_school_elem_district)
+y$geo_school_hs_district[is.na(y$geo_school_hs_district)]<-calc_mode(y$geo_school_hs_district)
+
+#y$char_frpl[is.na(y$char_frpl)]<-median(y$char_frpl, na.rm = TRUE)
+y$econ_midincome[is.na(y$econ_midincome)]<-median(y$econ_midincome, na.rm = TRUE)
+#y$geo_fs_flood_factor[is.na(y$geo_fs_flood_factor)]<-median(y$geo_fs_flood_factor, na.rm = TRUE)
+#y$geo_fs_flood_risk_direction[is.na(y$geo_fs_flood_risk_direction)]<-median(y$geo_fs_flood_risk_direction, na.rm = TRUE)
+
+y$geo_floodplain[is.na(y$geo_floodplain)]<-0
+y$geo_ohare_noise[is.na(y$geo_ohare_noise)]<-0
+y$geo_withinmr100[is.na(y$geo_withinmr100)]<-0
+y$geo_withinmr101300[is.na(y$geo_withinmr101300)]<-0
+y$ind_garage[is.na(y$ind_garage)]<-0
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
